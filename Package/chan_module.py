@@ -36,7 +36,7 @@ class Model(object):
     def __init__(self, TableOfForecast, TableOfFlow, TableOfEqp, TableOfUpdate, EqpDailyCalendar,
                  EqpWeeklyOrMonthlyCalendar):
         self.df_Forecast = TableOfForecast  # need change
-        self.df_Flow = TableOfFlow[['product', 'step', 'process', 'eqp', 'oee', 'uph', 'hc_group', 'mmr']]
+        self.df_Flow = TableOfFlow[['product', 'step', 'process', 'eqp', 'oee', 'uph','pass','hc_group', 'mmr']]
         self.df_Eqp = TableOfEqp
         self.df_Update = TableOfUpdate
         self.df_EqpCalenderByDay = EqpDailyCalendar
@@ -51,7 +51,7 @@ class Model(object):
         df_dailyEQ['qty_day'] = (df_dailyEQ['qty'] / df_dailyEQ['day_week']) * df_dailyEQ['day_day']  # need change
         df_dailyEQ = pd.merge(df_dailyEQ, self.df_Eqp, on=['eqp'], how='left')
         df_dailyEQ = df_dailyEQ[
-            ['product', 'cm', 'cw', 'dd', 'step', 'process', 'eqp', 'oee', 'uph', 'hc_group', 'mmr', 'day_day',
+            ['product', 'cm', 'cw', 'dd', 'step', 'process', 'eqp', 'oee', 'uph','pass', 'hc_group', 'mmr', 'day_day',
              'availeqp', 'qty_day']]
         return df_dailyEQ
 
@@ -69,6 +69,10 @@ class Model(object):
                 df_dailyEQ.loc[(df_dailyEQ['eqp'] == df8.at[i, 'eqp']) & (df_dailyEQ['step'] == df8.at[i, 'step']) & (
                             df_dailyEQ['dd'] >= df8.at[i, 'startdate']), 'oee'] = df8.at[i, 'newvalue']
 
+            elif df8.at[i, 'item'] == 'pass' and df8.at[i, 'product'] == 'All' and df8.at[i, 'status'] == 'Plan':
+                df_dailyEQ.loc[(df_dailyEQ['eqp'] == df8.at[i, 'eqp']) & (df_dailyEQ['step'] == df8.at[i, 'step']) & (
+                        df_dailyEQ['dd'] >= df8.at[i, 'startdate']), 'pass'] = df8.at[i, 'newvalue']
+
             elif df8.at[i, 'item'] == 'mmr' and df8.at[i, 'product'] == 'All' and df8.at[i, 'status'] == 'Plan':
                 df_dailyEQ.loc[(df_dailyEQ['eqp'] == df8.at[i, 'eqp']) & (df_dailyEQ['step'] == df8.at[i, 'step']) & (
                             df_dailyEQ['dd'] >= df8.at[i, 'startdate']), 'mmr'] = df8.at[i, 'newvalue']
@@ -85,6 +89,12 @@ class Model(object):
                                 df_dailyEQ['step'] == df8.at[i, 'step']) & (
                                 df_dailyEQ['dd'] >= df8.at[i, 'startdate']), 'oee'] = df8.at[i, 'newvalue']
 
+            elif df8.at[i, 'item'] == 'pass' and df8.at[i, 'status'] == 'Plan':
+                df_dailyEQ.loc[
+                    (df_dailyEQ['product'] == df8.at[i, 'product']) & (df_dailyEQ['eqp'] == df8.at[i, 'eqp']) & (
+                                df_dailyEQ['step'] == df8.at[i, 'step']) & (
+                                df_dailyEQ['dd'] >= df8.at[i, 'startdate']), 'pass'] = df8.at[i, 'newvalue']
+
             elif df8.at[i, 'item'] == 'mmr' and df8.at[i, 'status'] == 'Plan':
                 df_dailyEQ.loc[
                     (df_dailyEQ['product'] == df8.at[i, 'product']) & (df_dailyEQ['eqp'] == df8.at[i, 'eqp']) & (
@@ -96,12 +106,13 @@ class Model(object):
                             df_dailyEQ['dd'] >= df8.at[i, 'startdate']), 'availeqp'] = df8.at[i, 'newvalue']
 
         df_dailyEQ['hour'] = 24
-        df_dailyEQ.loc[df_dailyEQ.day_day == 0, ['availeqp', 'oee', 'uph', 'mmr', 'hour']] = np.nan, np.nan, np.nan, np.nan, np.nan
+        df_dailyEQ['qty_day'] = df_dailyEQ['qty_day']*df_dailyEQ['pass']
+        df_dailyEQ.loc[df_dailyEQ.day_day == 0, ['availeqp', 'oee', 'uph','pass', 'mmr', 'hour']] = np.nan, np.nan, np.nan, np.nan, np.nan, np.nan
         return df_dailyEQ
 
     def getDailyRequirement(self):
         df_dailyEQ = pd.pivot_table(self.getEqDailyUpdated(),index=['product','cm','cw','dd','step','process','eqp','hc_group'],
-                                    aggfunc={'oee':np.mean,"uph":np.mean,"mmr":np.mean, "availeqp":np.mean,
+                                    aggfunc={'oee':np.mean,"uph":np.mean,"pass":np.mean,"mmr":np.mean, "availeqp":np.mean,
                                              "qty_day":np.sum,"hour":np.sum}).reset_index()
         df_dailyEQ['req'] = df_dailyEQ['qty_day']/(df_dailyEQ['uph']*df_dailyEQ['oee']*df_dailyEQ['hour'])
         df_dailyEQ['util'] = df_dailyEQ['req']/df_dailyEQ['availeqp']
@@ -116,7 +127,7 @@ class Model(object):
 
     def getWeeklyRequirement(self):
         df_weeklyEQ = pd.pivot_table(self.getEqDailyUpdated(),index=['product','cw','step','process','eqp','hc_group'],
-                                    aggfunc={'oee':np.mean,"uph":np.mean,"mmr":np.mean, "availeqp":np.mean,
+                                    aggfunc={'oee':np.mean,"uph":np.mean,"pass":np.mean,"mmr":np.mean, "availeqp":np.mean,
                                              "qty_day":np.sum,"hour":np.sum}).reset_index()
         df_weeklyEQ['req'] = df_weeklyEQ['qty_day']/(df_weeklyEQ['uph']*df_weeklyEQ['oee']*df_weeklyEQ['hour'])
         df_weeklyEQ['util'] = df_weeklyEQ['req']/df_weeklyEQ['availeqp']
@@ -131,7 +142,7 @@ class Model(object):
 
     def getMonthlyRequirement(self):
         df_monthlyEQ = pd.pivot_table(self.getEqDailyUpdated(),index=['product','cm','step','process','eqp','hc_group'],
-                                    aggfunc={'oee':np.mean,"uph":np.mean,"mmr":np.mean, "availeqp":np.mean,
+                                    aggfunc={'oee':np.mean,"uph":np.mean,"pass":np.mean,"mmr":np.mean, "availeqp":np.mean,
                                              "qty_day":np.sum,"hour":np.sum}).reset_index()
         df_monthlyEQ['req'] = df_monthlyEQ['qty_day']/(df_monthlyEQ['uph']*df_monthlyEQ['oee']*df_monthlyEQ['hour'])
         df_monthlyEQ['util'] = df_monthlyEQ['req']/df_monthlyEQ['availeqp']
@@ -167,7 +178,7 @@ class ModelUsingDayCT(Model):
         df_dailyEQ = pd.merge(df_dailyEQ, df_ctForcast, on=['product', 'dd', 'step', 'eqp'], how='left')
         df_dailyEQ = pd.merge(df_dailyEQ, self.df_Eqp, on=['eqp'], how='left')
         df_dailyEQ = df_dailyEQ[
-            ['product', 'cm', 'cw', 'dd', 'step', 'process', 'eqp', 'oee', 'uph', 'hc_group', 'mmr', 'day_day',
+            ['product', 'cm', 'cw', 'dd', 'step', 'process', 'eqp', 'oee', 'uph','pass', 'hc_group', 'mmr', 'day_day',
              'availeqp', 'qty_day']]
         df_dailyEQ = df_dailyEQ.fillna({'qty_day': 0})
         return df_dailyEQ
@@ -189,7 +200,7 @@ class ModelUsingDay(Model):
         df_dailyEQ['qty_day'] = (df_dailyEQ['qty'] / df_dailyEQ['day_day']) * df_dailyEQ['day_day']  # need change
         df_dailyEQ = pd.merge(df_dailyEQ, self.df_Eqp, on=['eqp'], how='left')
         df_dailyEQ = df_dailyEQ[
-            ['product', 'cm', 'cw', 'dd', 'step', 'process', 'eqp', 'oee', 'uph', 'hc_group', 'mmr', 'day_day',
+            ['product', 'cm', 'cw', 'dd', 'step', 'process', 'eqp', 'oee', 'uph','pass', 'hc_group', 'mmr', 'day_day',
              'availeqp', 'qty_day']]
         return df_dailyEQ
 
@@ -211,7 +222,7 @@ class ModelUsingWeek(Model):
         df_dailyEQ['qty_day'] = (df_dailyEQ['qty'] / df_dailyEQ['day_week']) * df_dailyEQ['day_day']  # need change
         df_dailyEQ = pd.merge(df_dailyEQ, self.df_Eqp, on=['eqp'], how='left')
         df_dailyEQ = df_dailyEQ[
-            ['product', 'cm', 'cw', 'dd', 'step', 'process', 'eqp', 'oee', 'uph', 'hc_group', 'mmr', 'day_day',
+            ['product', 'cm', 'cw', 'dd', 'step', 'process', 'eqp', 'oee', 'uph','pass', 'hc_group', 'mmr', 'day_day',
              'availeqp', 'qty_day']]
         return df_dailyEQ
 
@@ -233,7 +244,7 @@ class ModelUsingMonth(Model):
         df_dailyEQ['qty_day'] = (df_dailyEQ['qty'] / df_dailyEQ['day_month']) * df_dailyEQ['day_day']  # need change
         df_dailyEQ = pd.merge(df_dailyEQ, self.df_Eqp, on=['eqp'], how='left')
         df_dailyEQ = df_dailyEQ[
-            ['product', 'cm', 'cw', 'dd', 'step', 'process', 'eqp', 'oee', 'uph', 'hc_group', 'mmr', 'day_day',
+            ['product', 'cm', 'cw', 'dd', 'step', 'process', 'eqp', 'oee', 'uph','pass', 'hc_group', 'mmr', 'day_day',
              'availeqp', 'qty_day']]
         return df_dailyEQ
 
