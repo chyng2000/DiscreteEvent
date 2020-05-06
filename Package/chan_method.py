@@ -25,6 +25,18 @@ def load_data(encoder = "cp1252", rawdata = "Input"):
                'Update':df6, 'DataForDaily':df_DailyForecast, 'DataForWeekly':df_WeeklyForecast, 'DataForMonthly':df_MonthlyForecast, 'Mapping':df7}
     return dict_df
 
+def load_data3(encoder = "cp1252", rawdata = "Input2"):
+    forecast = pd.read_csv("./" + rawdata + "/RawMonth.csv",usecols=[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19],encoding=encoder).dropna(how = 'any')
+    forecast['PartNumber'] = forecast['PartNumber'].apply(lambda x: str(x))
+    forecast['ProdName'] = forecast['ProdName'].apply(lambda x: str(x))
+    forecast = forecast.melt(['Plan','Area','ProdName','PartNumber'], var_name='CM', value_name='MonthQty').dropna(how = 'any')
+    calendar = pd.read_csv("./" + rawdata + "/Calendar.csv",usecols=[0,1,2],encoding=encoder).dropna(how = 'any').drop_duplicates(subset=['Qtr','CM'],keep='last')
+    shutdown = pd.read_csv("./" + rawdata + "/ShutDown.csv",usecols=[0,1,2],encoding=encoder).dropna(how = 'any').drop_duplicates(subset=['Area','CM'],keep='last')
+    uom = pd.read_csv("./" + rawdata + "/UOM.csv",usecols=[0,1,2,3,4,5],encoding=encoder).drop_duplicates(subset=['Area','ProcessGroup','ProdName','UOM'],keep='last')
+    process = pd.read_csv("./" + rawdata + "/ProcessTime.csv",usecols=[0,1,2,3,4,5,6,7],encoding=encoder).drop_duplicates(subset=['Area','ProcessGroup','Process','Step','UOM'],keep='last')
+    dict_df = {'forecast':forecast, 'calendar':calendar, 'shutdown':shutdown, 'uom':uom, 'process':process}
+
+    return dict_df
 
 def clear():
     # for windows

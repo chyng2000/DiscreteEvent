@@ -1,7 +1,6 @@
 import pandas as pd
 import numpy as np
 
-
 class EqpCalendarCreator(object):
     def __init__(self, TableOfEqp, TableOfOff, TableOfCalendar):
         self.__df_Eqp = TableOfEqp[['eqp']]
@@ -247,4 +246,78 @@ class ModelUsingMonth(Model):
             ['product', 'cm', 'cw', 'dd', 'step', 'process', 'eqp', 'oee', 'uph','pass', 'hc_group', 'mmr', 'day_day',
              'availeqp', 'qty_day']]
         return df_dailyEQ
+
+
+class manual_work_model():
+    def __init__(self, forecast, calendar, shutdown, uom, process):
+        self.df1 = forecast
+        self.df2 = calendar
+        self.df3 = shutdown
+        self.df4 = uom
+        self.df5 = process
+
+    def get_report(self):
+        temp01 = self.df4[(self.df4["ProdName"] == 'Nt Product Related')].drop(
+            columns=['ProcessGroup', 'UOM', 'qty/UOM', 'UOM/Day']).drop_duplicates(
+            subset=['Area', 'ProdName']).reset_index(drop=True)
+        temp02 = self.df1.groupby(['Plan', 'Area', 'CM'], as_index=False).sum()
+        temp02 = temp02[(temp02["MonthQty"] > 0)].drop(columns=['MonthQty'])
+        temp03 = pd.merge(temp02, temp01, on=['Area'], how='left')
+        temp03['PartNumber'] = temp03['ProdName']
+        temp03['MonthQty'] = 1
+        header_list = ['Plan', 'Area', 'ProdName', 'PartNumber', 'CM', 'MonthQty']
+        temp03 = temp03.reindex(columns=header_list)
+        t0 = self.df1.append(temp03, ignore_index=True)
+
+        t1 = pd.merge((pd.merge(t0, self.df2, on=['CM'], how='left')), self.df3, on=['CM', 'Area'], how='left')
+        t1['ShutDown'].fillna(value=0, inplace=True)
+        t1['Working Day/Month'] = t1['Day Available/Month'] - t1['ShutDown']
+        t2 = pd.merge(t1, self.df4, on=['Area', 'ProdName'], how='left')
+        t3 = pd.merge(t2, self.df5, on=['Area', 'ProcessGroup', 'UOM'], how='left')
+        t3['Frequency'] = t3['MonthQty'] / t3['qty/UOM']
+        t3.loc[(t3['UOM/Day'].isnull() == False), 'Frequency'] = t3['Working Day/Month'] * t3['UOM/Day']
+        t3['TotalTime(s)'] = t3['Frequency'] * t3['ElementTime(s)'] / t3['Allowance']
+        t3['TotalTime(hr)'] = t3['TotalTime(s)'] / 3600
+        t3_less = t3[(t3["Frequency"] != 0)]
+        t3_less = t3_less.replace([np.inf, -np.inf], np.nan)
+
+        t4 = t0.groupby(['Plan', 'Area', 'ProdName', 'CM'], as_index=False)['MonthQty'].sum()
+        t5 = pd.merge((pd.merge(t4, self.df2, on=['CM'], how='left')), self.df3, on=['CM', 'Area'], how='left')
+        t5['ShutDown'].fillna(value=0, inplace=True)
+        t5['Working Day/Month'] = t5['Day Available/Month'] - t5['ShutDown']
+        t6 = pd.merge(t5, self.df4, on=['Area', 'ProdName'], how='left')
+        t7 = pd.merge(t6, self.df5, on=['Area', 'ProcessGroup', 'UOM'], how='left')
+        t7['Frequency'] = t7['MonthQty'] / t7['qty/UOM']
+        t7.loc[(t7['UOM/Day'].isnull() == False), 'Frequency'] = t7['Working Day/Month'] * t7['UOM/Day']
+        t7['TotalTime(s)'] = t7['Frequency'] * t7['ElementTime(s)'] / t7['Allowance']
+        t7['TotalTime(hr)'] = t7['TotalTime(s)'] / 3600
+        c1 = t3.groupby(['Area', 'PartNumber']).nunique()
+        header_newlist = ['Plan', 'ProdName', 'CM', 'ProcessGroup', 'UOM', 'qty/UOM', 'UOM/Day', 'Process', 'Step']
+        c1 = c1.reindex(columns=header_newlist)
+        c1 = c1.reset_index()
+        c2 = self.df5.groupby(['Area']).nunique()
+        header_newlist2 = ['Step']
+        c2 = c2.reindex(columns=header_newlist2)
+        c2 = c2.reset_index()
+
+        c3 = t3.groupby(['Plan', 'Area', 'CM']).nunique()
+        header_newlist3 = ['Step']
+        c3 = c3.reindex(columns=header_newlist3)
+        c3 = c3.reset_index()
+
+        c4 = pd.merge(c2, c3, on=['Area'], how='left')
+        header_newlist4 = ['Plan', 'Area', 'CM', 'Step_x', 'Step_y']
+        c4 = c4.reindex(columns=header_newlist4)
+        c4['CheckStep'] = c4['Step_x'] - c4['Step_y']
+
+        RawQty = self.df1.groupby(['Plan', 'Area', 'CM', 'ProdName'], as_index=False).sum()
+        c5 = t7.groupby(['Plan', 'Area', 'ProdName', 'CM'], as_index=False)['MonthQty'].mean()
+        c5 = pd.merge(RawQty, c5, on=['Plan', 'Area', 'ProdName', 'CM'], how='left')
+        c5['CheckQty'] = c5['MonthQty_x'] - c5['MonthQty_y']
+
+        report_dict = {}
+        report_dict['manhour'] = t3_less
+        report_dict['qtychecked'] = c5
+        report_dict['stepchecked'] = c4
+        return report_dict
 

@@ -21,6 +21,7 @@ while choice != 'q':
     print("3 - Run model using weekly forecast")
     print("4 - Run model using monthly forecast")
     print("5 - Data Pre-Processing")
+    print("6 - Run manual work model using monthly forecast")
     print("q - Quit")
 
     choice = input("\nPlease enter your choice: ")
@@ -206,6 +207,36 @@ while choice != 'q':
                 chan_method.clear()
                 print("\nI don't understand that choice, please try again.\n")
         chan_method.clear()
+
+    elif choice == '6':
+        chan_method.clear()
+        choice6 = ''
+        while choice6 != 'b':
+            print("\n------ Run manual work model using monthly forecast ------")
+            print("1 - Run")
+            print("b - Back")
+            choice6 = input("\nPlease enter your choice: ")
+            if choice6 == '1':
+                start = timeit.default_timer()
+                chan_method.clear()
+                df = chan_method.load_data3()
+
+                # Create model and calculate
+                wb_model = cm.manual_work_model(df['forecast'], df['calendar'], df['shutdown'], df['uom'], df['process'])
+                report = wb_model.get_report()
+                report['manhour'].to_csv("manhour.csv",index=False)
+                report['qtychecked'].to_csv("qtychecked.csv", index=False)
+                report['stepchecked'].to_csv("stepchecked.csv", index=False)
+
+                stop = timeit.default_timer()
+                dt_string = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+                print("Run model using monthly forecast successfully in {}s at {}".format(str(stop-start)[:4],dt_string))
+
+            else:
+                chan_method.clear()
+                print("\nI don't understand that choice, please try again.\n")
+        chan_method.clear()
+
 
     elif choice == 'q':
         print("\nThanks for using. See you later.\n")
